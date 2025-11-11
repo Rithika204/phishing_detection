@@ -1,22 +1,9 @@
-<<<<<<< HEAD
 flask
 flask-cors
-tensorflow
-xgboost
-scikit-learn
-pandas
-joblib
-=======
-flask
-flask-cors
-tensorflow
-xgboost
-scikit-learn
-pandas
-joblib
 gunicorn
-numpy
-xgboost==1.7.6
 tensorflow-cpu==2.12.0
-
->>>>>>> c9dc7fe (Initial commit)
+xgboost==1.7.6
+scikit-learn
+numpy
+pandas
+joblib
