@@ -16,5 +16,7 @@ pandas
 joblib
 gunicorn
 numpy
+xgboost==1.7.6
+tensorflow-cpu==2.12.0
 
 >>>>>>> c9dc7fe (Initial commit)
