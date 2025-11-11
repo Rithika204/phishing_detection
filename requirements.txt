@@ -1,7 +1,7 @@
 flask
 flask-cors
+waitress
 gunicorn
-tensorflow-cpu==2.12.0
 xgboost==1.7.6
 scikit-learn
 numpy
