@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>URL Phishing Detector — Client-side</title>
+
+  <!-- Tailwind -->
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <!-- Poppins -->
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+  <!-- SweetAlert2 -->
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <!-- PapaParse -->
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+  <style>
+    body {
+      font-family: 'Poppins', sans-serif;
+      background: linear-gradient(-45deg, #74ABE2, #5563DE, #6EE7B7, #9333EA);
+      background-size: 400% 400%;
+      animation: gradientBG 15s ease infinite;
+    }
+    @keyframes gradientBG {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+    .fade-in { animation: fadeIn 0.45s ease-in-out; }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: scale(0.98); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    .loader {
+      border: 4px solid rgba(0,0,0,0.08);
+      border-top: 4px solid #6366F1;
+      border-radius: 50%;
+      width: 26px; height: 26px;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    .table-wrap { max-height: 260px; overflow: auto; }
+  </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-6">
+  <div class="bg-white bg-opacity-95 p-8 rounded-2xl shadow-2xl w-full max-w-3xl fade-in">
+    <div class="mb-6">
+      <h1 class="text-4xl md:text-5xl font-extrabold text-indigo-700 text-center">🔍 URL Phishing Detector</h1>
+    </div>
+
+    <!-- Input row -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <input id="urlInput" type="text" placeholder="Enter a URL (e.g. https://example.com)"
+        class="col-span-2 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" />
+
+      <div class="flex flex-col space-y-2">
+        <button id="checkBtn"
+          class="w-full bg-indigo-600 text-white py-2 rounded-lg font-semibold hover:bg-indigo-700 transition">
+          Check URL
+        </button>
+
+        <label class="w-full">
+          <input id="csvUpload" type="file" accept=".csv" class="hidden" />
+          <button id="uploadBtn" class="w-full bg-gray-200 py-2 rounded-lg hover:bg-gray-300 transition">
+            Upload CSV
+          </button>
+        </label>
+      </div>
+    </div>
+
+    <!-- Loader -->
+    <div id="loading" class="mt-4 hidden flex items-center space-x-3">
+      <div class="loader"></div>
+      <div class="text-gray-600">Analyzing…</div>
+    </div>
+
+    <!-- Result box -->
+    <div id="resultBox" class="mt-6 hidden p-4 rounded-lg border bg-gray-50">
+      <div class="flex items-start justify-between">
+        <div>
+          <p id="resultText" class="text-lg font-semibold"></p>
+          <p id="reasonText" class="text-sm text-gray-700 mt-2"></p>
+        </div>
+        <div id="badge" class="text-right"></div>
+      </div>
+    </div>
+
+    <!-- Batch results -->
+    <div id="batchSection" class="mt-6 hidden">
+      <div class="flex items-center justify-between mb-3">
+        <div>
+          <p class="font-semibold">Batch results (from uploaded CSV)</p>
+          <p class="text-xs text-gray-500">CSV should contain a column named <code>url</code> (case-insensitive)</p>
+        </div>
+        <div class="space-x-2">
+          <button id="downloadCsv" class="px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700">Download results CSV</button>
+          <button id="clearBatch" class="px-3 py-2 bg-red-100 text-red-700 rounded hover:bg-red-200">Clear</button>
+        </div>
+      </div>
+
+      <div class="bg-white p-3 rounded border table-wrap">
+        <table class="w-full text-sm">
+          <thead class="text-left text-gray-600">
+            <tr>
+              <th class="py-2 pr-4">URL</th>
+              <th class="py-2 pr-4">Prediction</th>
+              <th class="py-2 pr-4">Score</th>
+              <th class="py-2 pr-4">Reasons</th>
+            </tr>
+          </thead>
+          <tbody id="batchTableBody"></tbody>
+        </table>
+      </div>
+
+      <div class="mt-3 text-sm text-gray-700">
+        <span id="batchSummary"></span>
+      </div>
+    </div>
+  </div>
+
+<script>
+function analyzeUrl(rawUrl) {
+  const reasons = [];
+  let score = 0;
+
+  let url = rawUrl.trim();
+  if (!url) return { prediction: 'error', score: 0, reasons: ['Empty URL field'] };
+
+  if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(url)) {
+    url = 'http://' + url;
+  }
+
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch (e) {
+    return { prediction: 'error', score: 0, reasons: ['Invalid or malformed URL'] };
+  }
+
+  const host = parsed.hostname;
+  const path = parsed.pathname + parsed.search + parsed.hash;
+  const full = parsed.href;
+
+  const ipRegex = /^(?:\d{1,3}\.){3}\d{1,3}$/;
+  if (ipRegex.test(host)) score += 3, reasons.push('IP address used instead of domain');
+  if (full.includes('@')) score += 2, reasons.push('@ symbol found');
+  if (full.length > 120) score += 2; else if (full.length > 75) score += 1;
+  if (host.includes('-')) score += 1;
+  if (host.split('.').length - 1 >= 3) score += 1;
+
+  const suspiciousWords = ['login','signin','bank','secure','update','verify','account','confirm','wp-content','paypal','ebay','appleid','verifyaccount'];
+  const found = suspiciousWords.filter(w => full.toLowerCase().includes(w));
+  if (found.length) score += 2, reasons.push('Suspicious words: ' + found.join(', '));
+
+  if (parsed.protocol !== 'https:') score += 1;
+  const suspiciousTlds = ['tk','ml','ga','cf','gq'];
+  const tld = host.split('.').pop();
+  if (suspiciousTlds.includes(tld)) score += 1;
+
+  // ✅ Added feature — Typo domain detection
+  const trusted = ['google.com', 'facebook.com', 'amazon.com', 'youtube.com', 'whatsapp.com', 'microsoft.com', 'wikipedia.org'];
+  const isTrusted = trusted.some(d => host.endsWith(d));
+  const typoDetected = trusted.some(d => {
+    const base = d.split('.')[0];
+    return host.includes(base) && !host.endsWith(d) && /(.)\1{1,}/.test(host);
+  });
+
+  const threshold = 3;
+
+  if (typoDetected) {
+    return { prediction: 'error', score, reasons: ['Possible typo or unrecognized variant of trusted domain'], normalized: parsed.href, host, path };
+  }
+
+  if (score >= threshold) return { prediction: 'phishing', score, reasons, normalized: parsed.href, host, path };
+  if (isTrusted) return { prediction: 'legitimate', score, reasons, normalized: parsed.href, host, path };
+  return { prediction: 'error', score, reasons: ['Unrecognized or unrelated domain'], normalized: parsed.href, host, path };
+}
+
+// --- UI same as your old version ---
+const checkBtn = document.getElementById('checkBtn');
+const urlInput = document.getElementById('urlInput');
+const loading = document.getElementById('loading');
+const resultBox = document.getElementById('resultBox');
+const resultText = document.getElementById('resultText');
+const reasonText = document.getElementById('reasonText');
+const badge = document.getElementById('badge');
+
+function showResultUI(analyzed) {
+  resultBox.classList.remove('hidden');
+  if (analyzed.prediction === 'error') {
+    resultText.textContent = '❌ Error or Unrecognized URL';
+    resultText.className = 'text-gray-800 text-lg font-bold';
+    badge.innerHTML = '<div class="px-3 py-1 rounded text-sm bg-gray-200 text-gray-800">Error</div>';
+  } else if (analyzed.prediction === 'phishing') {
+    resultText.textContent = '⚠️ URL Phishing Detected!';
+    resultText.className = 'text-red-600 text-lg font-bold animate-pulse';
+    badge.innerHTML = '<div class="px-3 py-1 rounded text-sm bg-red-100 text-red-700">Phishing</div>';
+  } else {
+    resultText.textContent = '✅ Legitimate URL';
+    resultText.className = 'text-green-600 text-lg font-bold';
+    badge.innerHTML = '<div class="px-3 py-1 rounded text-sm bg-green-100 text-green-700">Legit</div>';
+  }
+  reasonText.innerHTML = `<strong>Score:</strong> ${analyzed.score} • <strong>Reasons:</strong> ${analyzed.reasons.join(' · ')}`;
+}
+
+checkBtn.addEventListener('click', () => {
+  const raw = urlInput.value.trim();
+  if (!raw) {
+    Swal.fire({ icon: 'warning', title: 'Enter a URL', text: 'Please type or paste a URL to analyze.' });
+    return;
+  }
+  loading.classList.remove('hidden');
+  resultBox.classList.add('hidden');
+
+  setTimeout(() => {
+    const analyzed = analyzeUrl(raw);
+    loading.classList.add('hidden');
+    showResultUI(analyzed);
+    Swal.fire({
+      icon: analyzed.prediction === 'phishing' ? 'error' :
+            analyzed.prediction === 'error' ? 'warning' : 'success',
+      title: analyzed.prediction === 'phishing' ? 'Phishing Detected!' :
+             analyzed.prediction === 'error' ? 'Invalid or Unrecognized URL' : 'Looks Safe',
+      html: `<strong>Score:</strong> ${analyzed.score}<br><small>${analyzed.reasons.join('<br>')}</small>`,
+      confirmButtonColor: analyzed.prediction === 'phishing' ? '#DC2626' :
+                          analyzed.prediction === 'error' ? '#6B7280' : '#16A34A'
+    });
+  }, 400);
+});
+</script>
+</body>
+</html>

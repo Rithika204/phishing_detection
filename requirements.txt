@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 flask
 flask-cors
 tensorflow
@@ -5,3 +6,12 @@ xgboost
 scikit-learn
 pandas
 joblib
+=======
+flask
+flask-cors
+tensorflow
+xgboost
+scikit-learn
+pandas
+joblib
+>>>>>>> c9dc7fe (Initial commit)
