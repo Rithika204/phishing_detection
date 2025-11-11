@@ -14,4 +14,7 @@ xgboost
 scikit-learn
 pandas
 joblib
+gunicorn
+numpy
+
 >>>>>>> c9dc7fe (Initial commit)
